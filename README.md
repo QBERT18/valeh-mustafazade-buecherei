@@ -19,6 +19,7 @@ Eine kleine Bücherei-API in **Go**, mit Mini-Frontend in **React**.
 - [API testen](#-api-testen) (Go-Tests und Postman)
 - [Frontend](#-frontend)
 - [Fragen und Antworten](#-fragen-und-antworten)
+- [Wie ich weitermachen würde](#-wie-ich-weitermachen-würde)
 
 ---
 
@@ -438,3 +439,130 @@ Es gibt zwei Arten von Pagination:
 - Für jede Spalte, nach der sortiert wird, einen **Index** anlegen, damit es schnell bleibt.
 
 </details>
+
+---
+
+## 🧭 Wie ich weitermachen würde
+
+Die App ist ein guter Anfang. Bevor ich weiterbaue, würde ich mit der Bücherei ein paar Fragen klären. Die Antworten entscheiden, was als Nächstes wichtig ist und was wir gar nicht brauchen.
+
+> [!TIP]
+> Jede Frage hat zwei Teile: was die App **heute** macht, und was sich je nach **Antwort** ändert.
+
+### Erst fragen
+
+#### 📊 Wie viele Bücher wird es geben?
+
+**Heute:** Alle Listen kommen komplett zurück. Die Suche nutzt `ILIKE '%…%'`. Dafür kann Postgres keinen normalen Index nutzen und schaut jede Zeile an.
+
+| Antwort | Was ich dann mache |
+|---|---|
+| ein paar Tausend | Nichts. Das passt so. |
+| Zehntausende und mehr | **Pagination** (Cursor, siehe Frage „Pagination und Sorting“) und für die Suche einen **Trigramm-Index** (`pg_trgm`), damit sie schnell bleibt |
+| Millionen | Eine eigene **Suchmaschine** (z. B. OpenSearch) für die Suche. Die Datenbank selbst schafft das noch (siehe „Zu viele Bücher?“). |
+
+Genauso wichtig: **Wie viele Leute nutzen die App gleichzeitig?** Davon hängt ab, ob wir mehrere App-Server und einen Cache brauchen (siehe „Zu viele Reads?“).
+
+#### 📏 Wie groß sind die Dateien?
+
+**Heute:** höchstens **50 MB**. Der Upload läuft durch die App.
+
+| Antwort | Was ich dann mache |
+|---|---|
+| normale E-Books (EPUB 1–5 MB, Text-PDFs) | Nichts. Das passt so. |
+| eingescannte Bücher, Bildbände (oft 200 MB und mehr) | **Direkt-Upload** mit temporärem Link, in Stücken (siehe „Zu große Dateien?“) |
+
+Und die Gesamtmenge: 100.000 Bücher × 20 MB sind schon **2 TB**. Das muss man beim Speicher und bei den Backups einplanen.
+
+#### 📄 Welche Formate wird es geben?
+
+**Heute:** **PDF und EPUB**, genau eine Datei pro Buch. Die App prüft den Inhalt der Datei, nicht die Endung.
+
+| Antwort | Was ich dann mache |
+|---|---|
+| auch Hörbücher (MP3, M4B) | Dateien werden viel größer. Abspielen im Browser braucht Streaming (der Player lädt nur das Stück, das gerade läuft). |
+| mehrere Formate pro Buch (PDF **und** EPUB) | Eine eigene Tabelle für Dateien statt der Felder am Buch |
+| im Browser lesen statt herunterladen | Ein Reader im Frontend (z. B. PDF.js, epub.js) |
+| gekaufte E-Books mit Lizenz | Dann darf nicht jeder herunterladen. Ein E-Book wird dann wie ein echtes Buch **ausgeliehen** (eine Lizenz = ein Leser gleichzeitig). |
+
+#### 👥 Verschiedene Nutzer? Rechte?
+
+**Heute:** Es gibt **kein Login**. Jeder darf alles, auch löschen. Das Frontend merkt sich die Person nur im Browser.
+
+> [!WARNING]
+> Das ist die größte Lücke der App. Für echte Nutzer muss das als Erstes kommen.
+
+Mein Vorschlag für Rollen:
+
+| Rolle | Darf |
+|---|---|
+| 👀 Gast | Bücher ansehen und suchen |
+| 📖 Leser | dazu: ausleihen, zurückgeben, eigene Ausleihen sehen, Dateien herunterladen |
+| 🗂️ Bibliothekar | dazu: Bücher und Regale anlegen, ändern, löschen; Ausleihen für andere buchen |
+| 🔑 Admin | dazu: Nutzer und Rollen verwalten |
+
+Wichtige Frage dazu: **Gibt es schon Konten**, z. B. von der Schule, der Stadt oder der Firma? Dann melden sich die Nutzer damit an (Single Sign-on über OpenID Connect), und wir speichern keine eigenen Passwörter.
+
+Technisch prüft dann eine Middleware bei jeder Anfrage, wer angemeldet ist und welche Rolle er hat. Beim Ausleihen kommt die Person aus dem Login und nicht mehr aus dem Request.
+
+#### 📚 Ein Titel, mehrere Exemplare?
+
+**Heute:** ein Buch = ein Exemplar. Hat die Bücherei „Faust“ dreimal, sind das drei Bücher mit drei Einträgen.
+
+Wenn es mehrere Exemplare gibt, würde ich das trennen:
+
+- **Titel:** Titel, Autor, ISBN, Datei. Gibt es einmal.
+- **Exemplar:** steht auf einem Regal, wird ausgeliehen. Gibt es so oft wie im Bestand.
+
+> [!IMPORTANT]
+> Das ist ein großer Umbau, der fast alle Endpunkte betrifft. Deshalb würde ich diese Frage **zuerst** klären.
+
+#### ⏰ Wie lange darf man ausleihen?
+
+**Heute:** Es gibt kein Rückgabedatum. Man darf so viele Bücher ausleihen, wie man will.
+
+Fragen an die Bücherei:
+
+- Gibt es eine **Frist** (z. B. 4 Wochen)? Darf man **verlängern**?
+- Soll es eine **Erinnerung** per E-Mail geben? **Mahngebühren**?
+- Wie viele Bücher darf eine Person **gleichzeitig** haben?
+- Kann man ein ausgeliehenes Buch **vormerken** (Warteliste)?
+
+Dafür bräuchte die Ausleihe ein Feld „zurück bis“, und ein Job prüft jeden Tag, was überfällig ist. Hier passt die Queue aus „Brauchen wir eine Queue?“.
+
+#### 🔐 Datenschutz
+
+**Heute:** Der Ausleih-Verlauf wird **für immer** gespeichert. Gelöschte Personen sind nur als gelöscht markiert und bleiben in der Datenbank.
+
+Wer was gelesen hat, sind persönliche Daten (DSGVO). Fragen dazu:
+
+- Wie lange darf der Verlauf gespeichert werden?
+- Muss eine Person auf Wunsch **wirklich** gelöscht werden können?
+
+Mein Vorschlag: Den Verlauf nach einer festen Zeit **anonymisieren**. Die Person wird entfernt, die Zahlen für eine Statistik („wie oft wurde Faust ausgeliehen?“) bleiben.
+
+#### 💬 Weitere Fragen
+
+| Frage | Warum |
+|---|---|
+| Gibt es **mehrere Standorte**? | Dann gehört jedes Regal zu einem Standort, und man sucht pro Standort. |
+| Sollen Buchdaten **per ISBN** automatisch geladen werden? | Spart Tipparbeit, z. B. über die Deutsche Nationalbibliothek. |
+| Gibt es **alte Daten** zum Übernehmen? | Dann brauchen wir einen Import, z. B. aus Excel oder dem alten System. |
+| **Wo** soll die App laufen? | Eigener Server oder Cloud entscheidet über Backups, Updates und Kosten. |
+| Wie schnell muss sie nach einem **Ausfall** wieder laufen? | Davon hängt ab, wie oft wir Backups machen und ob wir einen zweiten Server brauchen. |
+| Muss die Seite **barrierefrei** sein? | Für öffentliche Stellen ist das Pflicht (BITV). |
+| Nur **Deutsch**? | Mehrere Sprachen sind später schwer nachzurüsten. |
+
+### Dann bauen
+
+Unabhängig von den Antworten würde ich in dieser Reihenfolge weitermachen:
+
+| # | Was | Warum |
+|---|---|---|
+| 1 | 🔑 **Login und Rollen** | Heute kann jeder alles löschen. |
+| 2 | 🤖 **Automatische Tests bei jedem Push** (CI) | Go-Tests, Frontend-Tests und die Postman-Collection laufen dann von selbst. |
+| 3 | 📄 **Pagination** | Bevor die Listen groß werden. Dazu ein Endpunkt für die offene Ausleihe eines Buchs: Die Buch-Seite lädt dafür heute alle Ausleihen. |
+| 4 | 💾 **Backups** für Postgres und RustFS | Und einmal ausprobieren, ob man sie auch wieder einspielen kann. |
+| 5 | 📈 **Überwachung** | Ein `/health`-Endpunkt und Kennzahlen, damit man Probleme sieht, bevor die Nutzer sie melden |
+| 6 | ⏰ **Ausleihfristen** | Sobald die Regeln geklärt sind |
+| 7 | 🧹 **Aufräum-Job** für Dateien ohne Buch | Siehe „Und wenn die Verbindung weg ist?“ |
