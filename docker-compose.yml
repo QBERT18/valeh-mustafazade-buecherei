@@ -1,6 +1,8 @@
 services:
   app:
     build: .
+    # Come back up if Postgres was briefly unreachable (e.g. during `docker compose restart`).
+    restart: unless-stopped
     ports:
       - "8080:8080"
     environment: &app-env
@@ -29,6 +31,8 @@ services:
     build: .
     command: ["buecherei", "seed"]
     environment: *app-env
+    # Retry if Postgres is briefly unreachable (e.g. during `docker compose restart`).
+    restart: on-failure:5
     depends_on:
       postgres:
         condition: service_healthy
@@ -38,6 +42,8 @@ services:
   # React frontend served by nginx; it forwards /api/ to the app.
   frontend:
     build: ./frontend
+    # nginx exits if "app" can't be resolved at startup; retry until it can.
+    restart: unless-stopped
     ports:
       - "3000:80"
     depends_on:
