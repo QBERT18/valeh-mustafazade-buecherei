@@ -54,6 +54,9 @@ func TestGetPerson(t *testing.T) {
 	if got.Name != "Anna" || len(got.Loans) != 1 || got.Loans[0].BookID != book.ID {
 		t.Errorf("unexpected person (loans should be included): %+v", got)
 	}
+	if b := got.Loans[0].Book; b == nil || b.Titel != "Faust" {
+		t.Errorf("loan should include its book, got %+v", b)
+	}
 
 	call(t, "GET", "/people/999", nil, http.StatusNotFound)
 	call(t, "GET", "/people/abc", nil, http.StatusBadRequest)

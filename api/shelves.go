@@ -30,8 +30,14 @@ func (h *Handler) createShelf(c *gin.Context) {
 }
 
 func (h *Handler) listShelves(c *gin.Context) {
+	q, err := searchAndSort(c, h.DB, []string{"shelf_name"},
+		map[string]string{"name": "shelf_name", "limit": "limit"})
+	if err != nil {
+		writeError(c, err)
+		return
+	}
 	var shelves []db.Shelf
-	if err := h.DB.Preload("Books").Find(&shelves).Error; err != nil {
+	if err := q.Preload("Books").Find(&shelves).Error; err != nil {
 		writeError(c, err)
 		return
 	}

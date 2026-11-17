@@ -69,8 +69,14 @@ func (h *Handler) createBook(c *gin.Context) {
 }
 
 func (h *Handler) listBooks(c *gin.Context) {
+	q, err := searchAndSort(c, h.DB, []string{"titel", "autor", "isbn"},
+		map[string]string{"titel": "titel", "autor": "autor", "jahr": "jahr", "created": "created_at"})
+	if err != nil {
+		writeError(c, err)
+		return
+	}
 	var books []db.Book
-	if err := h.DB.Find(&books).Error; err != nil {
+	if err := q.Find(&books).Error; err != nil {
 		writeError(c, err)
 		return
 	}

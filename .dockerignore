@@ -2,3 +2,5 @@
 .vscode
 .env
 docker-compose.yml
+# Keep the frontend (and its node_modules) out of the Go image build.
+frontend

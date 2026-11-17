@@ -3,7 +3,7 @@ services:
     build: .
     ports:
       - "8080:8080"
-    environment:
+    environment: &app-env
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       POSTGRES_USER: ${POSTGRES_USER:-buecherei}
@@ -19,6 +19,29 @@ services:
         condition: service_healthy
       storage-init:
         condition: service_completed_successfully
+      # The app starts after the seed, so both never migrate at the same time.
+      seed:
+        condition: service_completed_successfully
+
+  # One-shot job: fills an empty database with sample data, then exits.
+  # Does nothing if there is already data, so it is safe on every `up`.
+  seed:
+    build: .
+    command: ["buecherei", "seed"]
+    environment: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      storage-init:
+        condition: service_completed_successfully
+
+  # React frontend served by nginx; it forwards /api/ to the app.
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - app
 
   postgres:
     image: postgres:18-alpine

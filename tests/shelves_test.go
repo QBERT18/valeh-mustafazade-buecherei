@@ -57,6 +57,38 @@ func TestListShelves(t *testing.T) {
 	}
 }
 
+func TestListShelvesSearchAndSort(t *testing.T) {
+	reset(t)
+	createShelf(t, "Klassiker", 5)
+	createShelf(t, "Krimis", 2)
+	createShelf(t, "Lexika", 9)
+
+	names := func(path string) string {
+		t.Helper()
+		var names []string
+		for _, s := range decode[[]db.Shelf](t, call(t, "GET", path, nil, http.StatusOK)) {
+			names = append(names, s.ShelfName)
+		}
+		return strings.Join(names, ",")
+	}
+
+	cases := map[string]string{
+		"/shelves?q=kr":        "Krimis",
+		"/shelves?sort=-name":  "Lexika,Krimis,Klassiker",
+		"/shelves?sort=limit":  "Krimis,Klassiker,Lexika",
+		"/shelves?sort=-limit": "Lexika,Klassiker,Krimis",
+	}
+	for path, want := range cases {
+		t.Run(path, func(t *testing.T) {
+			if got := names(path); got != want {
+				t.Errorf("got %q, want %q", got, want)
+			}
+		})
+	}
+
+	call(t, "GET", "/shelves?sort=deleted_at", nil, http.StatusBadRequest)
+}
+
 func TestGetShelf(t *testing.T) {
 	reset(t)
 	shelf := createShelf(t, "A", 3)

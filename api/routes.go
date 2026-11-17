@@ -60,6 +60,7 @@ var (
 	errPraesenzbestand = errors.New("book is Präsenzbestand and cannot be lent")
 	errBookOnLoan      = errors.New("book is on loan")
 	errBookNotOnLoan   = errors.New("book is not on loan")
+	errInvalidSort     = errors.New("invalid sort field")
 )
 
 func parseID(c *gin.Context) (uint, bool) {
@@ -77,7 +78,8 @@ func writeError(c *gin.Context, err error) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 	case errors.Is(err, errNoFile):
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-	case errors.Is(err, errShelfNotFound), errors.Is(err, errPersonNotFound):
+	case errors.Is(err, errShelfNotFound), errors.Is(err, errPersonNotFound),
+		errors.Is(err, errInvalidSort):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	case errors.Is(err, errShelfFull), errors.Is(err, errLimitBelowCount),
 		errors.Is(err, errPersonHasLoans), errors.Is(err, errPraesenzbestand),

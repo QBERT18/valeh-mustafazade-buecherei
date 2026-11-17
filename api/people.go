@@ -43,8 +43,10 @@ func (h *Handler) getPerson(c *gin.Context) {
 		return
 	}
 
+	// Loans come with their book, so a "my loans" page needs only this call.
 	var person db.Person
-	if err := h.DB.Preload("Loans").First(&person, id).Error; err != nil {
+	if err := h.DB.Preload("Loans", func(tx *gorm.DB) *gorm.DB { return tx.Order("id") }).
+		Preload("Loans.Book").First(&person, id).Error; err != nil {
 		writeError(c, err)
 		return
 	}

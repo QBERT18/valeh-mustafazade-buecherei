@@ -74,6 +74,49 @@ func TestListBooks(t *testing.T) {
 	}
 }
 
+func TestListBooksSearchAndSort(t *testing.T) {
+	reset(t)
+	for _, b := range []gin.H{
+		{"Titel": "Faust", "Autor": "Goethe", "Jahr": "1808-01-01T00:00:00Z"},
+		{"Titel": "Effi Briest", "Autor": "Fontane", "Jahr": "1896-01-01T00:00:00Z"},
+		{"Titel": "Werther", "Autor": "Goethe", "Jahr": "1774-01-01T00:00:00Z"},
+		{"Titel": "100% Rabatt", "Autor": "Niemand", "Jahr": "2000-01-01T00:00:00Z"},
+	} {
+		call(t, "POST", "/books", b, http.StatusCreated)
+	}
+
+	titles := func(path string) string {
+		t.Helper()
+		var names []string
+		for _, b := range decode[[]db.Book](t, call(t, "GET", path, nil, http.StatusOK)) {
+			names = append(names, b.Titel)
+		}
+		return strings.Join(names, ",")
+	}
+
+	cases := map[string]string{
+		"/books?q=goethe":            "Faust,Werther", // searches the author, case-insensitive
+		"/books?q=BRIEST":            "Effi Briest",
+		"/books?q=%25":               "100% Rabatt", // "%" is searched literally
+		"/books?q=xyz":               "",
+		"/books?sort=titel":          "100% Rabatt,Effi Briest,Faust,Werther",
+		"/books?sort=-jahr":          "100% Rabatt,Effi Briest,Faust,Werther",
+		"/books?sort=jahr":           "Werther,Faust,Effi Briest,100% Rabatt",
+		"/books?q=goethe&sort=-jahr": "Faust,Werther",
+	}
+	for path, want := range cases {
+		t.Run(path, func(t *testing.T) {
+			if got := titles(path); got != want {
+				t.Errorf("got %q, want %q", got, want)
+			}
+		})
+	}
+
+	for _, bad := range []string{"/books?sort=file_key", "/books?sort=titel%3BDROP%20TABLE%20books"} {
+		call(t, "GET", bad, nil, http.StatusBadRequest)
+	}
+}
+
 func TestGetBook(t *testing.T) {
 	reset(t)
 	shelf := createShelf(t, "A", 3)
