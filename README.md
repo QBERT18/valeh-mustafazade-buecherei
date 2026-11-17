@@ -1,19 +1,43 @@
-# Bücherei
+# 📚 Bücherei
 
-Eine kleine Bücherei-API in Go.
+Eine kleine Bücherei-API in **Go**, mit Mini-Frontend in **React**.
 
-- **Regale** haben ein Limit, wie viele Bücher darauf passen.
-- **Bücher** stehen auf einem Regal (oder auf keinem) und können eine PDF- oder EPUB-Datei haben.
-- **Personen** können Bücher ausleihen und zurückgeben.
-- **Präsenzbestand** (z. B. Lexika) darf gelesen, aber nicht ausgeliehen werden.
+> [!TIP]
+> **Schnellstart:** `.env` anlegen ([so geht's](#1-env-anlegen)), dann:
+>
+> ```sh
+> docker compose up -d --build
+> ```
+>
+> Danach im Browser **http://localhost:3000** öffnen. Beispieldaten sind schon da.
+
+## Inhalt
+
+- [Worum geht es?](#-worum-geht-es)
+- [Starten](#-starten)
+- [Docker-Befehle](#-docker-befehle)
+- [API testen](#-api-testen) (Go-Tests und Postman)
+- [Frontend](#-frontend)
+- [Fragen und Antworten](#-fragen-und-antworten)
+
+---
+
+## 💡 Worum geht es?
+
+| | Regel |
+|---|---|
+| 🗄️ **Regale** | haben ein Limit, wie viele Bücher darauf passen. |
+| 📖 **Bücher** | stehen auf einem Regal (oder auf keinem) und können eine PDF- oder EPUB-Datei haben. |
+| 🙋 **Personen** | können Bücher ausleihen und zurückgeben. |
+| 🔒 **Präsenzbestand** | (z. B. Lexika) darf gelesen, aber nicht ausgeliehen werden. |
 
 Die Daten (Regale, Bücher, Personen, Ausleihen) liegen in **Postgres**.
 Die Dateien der Bücher liegen in **RustFS**, einem S3-Speicher wie MinIO. In der Datenbank steht nur, wo die Datei liegt.
 
 | Endpunkt | Was er macht |
 |---|---|
-| `/shelves` | Regale anlegen, lesen, ändern, löschen |
-| `/books` | Bücher anlegen, lesen, ändern, löschen |
+| `/shelves` | Regale anlegen, lesen, ändern, löschen. Mit [Suche und Sortierung](#suchen-und-sortieren). |
+| `/books` | Bücher anlegen, lesen, ändern, löschen. Mit [Suche und Sortierung](#suchen-und-sortieren). |
 | `/books/:id/file` | Datei hochladen (`PUT`), herunterladen (`GET`), löschen (`DELETE`) |
 | `/books/:id/loan` · `/books/:id/return` | Buch ausleihen · zurückgeben |
 | `/people` | Personen anlegen, lesen, ändern, löschen |
@@ -21,9 +45,10 @@ Die Dateien der Bücher liegen in **RustFS**, einem S3-Speicher wie MinIO. In de
 
 ---
 
-## Starten und testen
+## 🚀 Starten
 
-**Voraussetzung:** Docker. Go 1.27 nur, wenn du die App oder die Tests ohne Docker laufen lässt.
+> [!NOTE]
+> **Voraussetzung:** Docker. Go 1.27 und Node brauchst du nur, wenn du App, Frontend oder Tests ohne Docker laufen lässt.
 
 ### 1. `.env` anlegen
 
@@ -49,37 +74,36 @@ S3_BUCKET=books
 docker compose up -d --build
 ```
 
-Das startet die App, Postgres und RustFS und legt den Bucket `books` an.
+Das startet die App, das Frontend, Postgres und RustFS, legt den Bucket `books` an und lädt die Beispieldaten.
 
 | Was | Adresse |
 |---|---|
-| API | http://localhost:8080 |
-| RustFS-Oberfläche | http://localhost:9001/rustfs/console/ (Login: `rustfsadmin` / `rustfsadmin`) |
-| Postgres | `localhost:5432` |
+| 🖥️ Frontend | http://localhost:3000 |
+| ⚙️ API | http://localhost:8080 |
+| 🗂️ RustFS-Oberfläche | http://localhost:9001/rustfs/console/ (Login: `rustfsadmin` / `rustfsadmin`) |
+| 🐘 Postgres | `localhost:5432` |
 
-### 3. Beispieldaten laden (optional)
+### 3. Beispieldaten
 
-```sh
-docker compose run --rm app buecherei seed
-```
+Die Beispieldaten werden beim Start **automatisch** geladen (Service `seed`):
 
-Das legt 2 Regale und 4 Bücher an, jedes mit einer kleinen PDF. Wenn schon Daten da sind, passiert nichts.
+| | |
+|---|---|
+| 🗄️ 5 Regale | „Moderne“ ist schon voll. |
+| 📖 25 Bücher | jedes mit einer kleinen PDF. 3 sind Präsenzbestand, 2 stehen auf keinem Regal. |
+| 🙋 4 Personen | Anna, Ben, Clara und David |
+| 🔁 7 Ausleihen | 4 sind noch offen, 3 schon zurückgegeben. |
+
+> [!NOTE]
+> Wenn schon Daten da sind, passiert beim Seeding nichts. Frische Beispieldaten bekommst du nur über einen [Reset](#zurücksetzen-und-beispieldaten).
 
 ### 4. Ausprobieren
 
 ```sh
 curl localhost:8080/books
+curl "localhost:8080/books?q=kafka&sort=-jahr"
 curl -X PUT localhost:8080/books/1/file -F "file=@tests/testdata/test.pdf"
 ```
-
-### Tests
-
-```sh
-docker compose up -d   # die Tests brauchen Postgres und RustFS
-go test ./...
-```
-
-Die Tests nutzen eine eigene Datenbank (`buecherei_test`) und einen eigenen Bucket (`books-test`). Deine normalen Daten bleiben unberührt.
 
 ### App ohne Docker starten
 
@@ -92,9 +116,167 @@ Die App liest dann die Werte aus `.env`.
 
 ---
 
-## Fragen und Antworten
+## 🐳 Docker-Befehle
 
-### Warum Postgres und nicht MongoDB?
+### Starten und stoppen
+
+| Befehl | Was er macht |
+|---|---|
+| `docker compose up -d --build` | Alles bauen und starten. **Nach Änderungen am Code genau das noch mal ausführen.** |
+| `docker compose up -d` | Starten, ohne neu zu bauen |
+| `docker compose up -d --build app` | Nur die App neu bauen und starten |
+| `docker compose up -d --build frontend` | Nur das Frontend neu bauen und starten |
+| `docker compose restart app` | App neu starten, ohne neu zu bauen |
+| `docker compose stop` | Alles anhalten. Die Daten bleiben. |
+| `docker compose down` | Alles anhalten und die Container löschen. Die Daten bleiben. |
+
+### Zurücksetzen und Beispieldaten
+
+| Befehl | Was er macht |
+|---|---|
+| `docker compose down -v && docker compose up -d --build` | 🔄 **Reset:** löscht alle Daten (Datenbank und Dateien) und startet neu mit frischen Beispieldaten |
+| `docker compose run --rm seed` | Beispieldaten von Hand laden. Das wirkt nur, wenn die Datenbank leer ist. |
+
+> [!CAUTION]
+> `-v` löscht die Volumes `postgres-data` und `rustfs-data`. **Alles, was du selbst angelegt hast, ist danach weg.**
+
+### Nachsehen
+
+| Befehl | Was er macht |
+|---|---|
+| `docker compose ps` | Welche Container laufen? `seed` und `storage-init` stehen auf „Exited“, das ist richtig. |
+| `docker compose logs -f app` | Logs der App live ansehen (Strg+C zum Beenden) |
+| `docker compose logs seed` | Was hat das Seeding gemacht? |
+| `docker compose exec postgres psql -U buecherei` | In die Datenbank schauen, z. B. `SELECT * FROM books;` (mit `\q` beenden) |
+
+---
+
+## 🧪 API testen
+
+Es gibt zwei Wege: die **Go-Tests** für Entwickler und eine **Postman-Collection**, mit der man die laufende API von außen durchklickt.
+
+### Go-Tests
+
+```sh
+docker compose up -d   # die Tests brauchen Postgres und RustFS
+go test ./...
+```
+
+> [!NOTE]
+> Die Tests nutzen eine eigene Datenbank (`buecherei_test`) und einen eigenen Bucket (`books-test`). Deine normalen Daten bleiben unberührt.
+
+### Postman-Collection
+
+Die Collection liegt in [`postman/buecherei.postman_collection.json`](postman/buecherei.postman_collection.json). Sie hat **54 Requests** und prüft bei jedem den Statuscode, oft auch die Antwort.
+
+> [!IMPORTANT]
+> Die Collection ist eine **Reihenfolge**. Sie legt ihre eigenen Testdaten an, merkt sich deren IDs in Variablen und räumt am Ende wieder auf. Lass sie deshalb als Ganzes **von oben nach unten** laufen.
+
+**In Postman (mit Oberfläche):**
+
+1. Stack starten: `docker compose up -d --build`
+2. In Postman **Import** → die Datei `postman/buecherei.postman_collection.json` wählen.
+3. **Settings → General → Working directory** auf den Projektordner setzen. Sonst findet der Upload-Request die Testdatei `tests/testdata/test.pdf` nicht.
+4. Collection anklicken → **Run** → **Run Bewerbertag**.
+
+**Im Terminal (mit [Newman](https://www.npmjs.com/package/newman)):**
+
+```sh
+npx newman run postman/buecherei.postman_collection.json
+```
+
+Im Projektordner ausführen, damit die Testdatei gefunden wird. Eine andere Adresse geht mit `--env-var baseUrl=http://...`.
+
+**Was wird geprüft?**
+
+| Ordner | Inhalt |
+|---|---|
+| 1 Shelves | Regal anlegen, lesen, suchen, sortieren, ändern |
+| 2 Books | Buch anlegen (auch Präsenzbestand ohne Regal), lesen, suchen, sortieren, ändern |
+| 3 Book files | PDF hochladen, herunterladen, löschen |
+| 4 People | Person anlegen, lesen, ändern |
+| 5 Loans | Ausleihen und zurückgeben, mit den Regeln: nicht doppelt ausleihen, kein Präsenzbestand, ausgeliehene Bücher und Personen mit Büchern nicht löschen |
+| 6 Shelf limit | Volles Regal (`409`), Limit nicht unter die Anzahl der Bücher (`409`) |
+| 7 Invalid input | Falsche Eingaben: `400`, `404`, `415` |
+| 8 Cleanup | Löscht alles, was die Collection angelegt hat |
+
+> [!TIP]
+> Die Collection läuft gegen deine normalen Daten, ändert sie aber nicht. Übrig bleibt nur ein Eintrag im Ausleih-Verlauf (`/loans`), weil Ausleihen nie gelöscht werden.
+
+---
+
+## 💻 Frontend
+
+Ein kleines Frontend mit **React**, **TypeScript** und **Tailwind**. Es liegt im Ordner `frontend/`.
+
+### Starten
+
+Mit Docker läuft es automatisch mit (`docker compose up -d --build`) auf **http://localhost:3000**.
+
+Ohne Docker (die API muss auf `localhost:8080` laufen):
+
+```sh
+cd frontend
+npm install
+npm run dev    # http://localhost:5173
+npm test       # Tests für slugify
+```
+
+### Seiten
+
+| Adresse | Was man dort macht |
+|---|---|
+| `/books` | Alle Bücher. Suchen und sortieren. |
+| `/books/new` | Neues Buch anlegen |
+| `/books/1-faust` | Ein Buch ansehen, ausleihen, zurückgeben, löschen |
+| `/books/1-faust/edit` | Ein Buch bearbeiten |
+| `/shelves`, `/shelves/new`, `/shelves/1-klassiker`, `/shelves/1-klassiker/edit` | Das Gleiche für Regale |
+| `/me` | Meine Ausleihen: was ich gerade habe, und was ich schon zurückgegeben habe |
+
+### Wer bin ich?
+
+> [!NOTE]
+> Es gibt **kein echtes Login**. Beim ersten Besuch fragt die Seite nach deinem Namen und legt dich als Person an. Der Browser merkt sich deine ID (`localStorage`). Mit „Abmelden“ vergisst er sie wieder, und du kannst einen neuen Namen eingeben.
+
+### Suchen und Sortieren
+
+Das macht das **Backend**, nicht der Browser (warum, steht unten bei „Pagination und Sorting“).
+
+```sh
+curl "localhost:8080/books?q=goethe&sort=-jahr"
+curl "localhost:8080/shelves?sort=name"
+```
+
+| Parameter | Bedeutung |
+|---|---|
+| `q` | Sucht im Titel, Autor und in der ISBN (bei Regalen: im Namen). Groß- und Kleinschreibung ist egal. |
+| `sort` | Bücher: `titel`, `autor`, `jahr`, `created`. Regale: `name`, `limit`. Ein `-` davor heißt absteigend, z. B. `-jahr`. Andere Werte geben `400`. |
+
+Suche und Sortierung stehen auch in der Adresse der Seite (`/books?q=goethe&sort=-jahr`). So kann man eine Liste als Lesezeichen speichern.
+
+### Slugs
+
+Die Adressen enthalten den Namen, damit man sie lesen kann: aus dem Buch 1 „Faust. Eine Tragödie“ wird `/books/1-faust-eine-tragoedie`. Umlaute werden zu `ae`, `oe`, `ue`, und `ß` wird zu `ss`.
+
+Die Seite liest nur die **Zahl vorne**. Ändert sich der Titel, funktioniert der alte Link also weiter. Die Seite tauscht die Adresse dann gegen die neue aus.
+
+### Wie spricht das Frontend mit der API?
+
+Das Frontend ruft immer `/api/...` auf, zum Beispiel `/api/books`.
+
+- **Im Container** leitet nginx das an die App weiter (`app:8080/books`).
+- **Mit `npm run dev`** macht das Vite.
+
+Frontend und API sehen für den Browser so aus, als kämen sie vom selben Server. Deshalb braucht das Backend **kein CORS**.
+
+---
+
+## ❓ Fragen und Antworten
+
+Klick auf eine Frage, um die Antwort zu sehen.
+
+<details>
+<summary><b>Warum Postgres und nicht MongoDB?</b></summary>
 
 Weil unsere Daten **zusammenhängen** und **Regeln** haben:
 
@@ -108,9 +290,10 @@ Postgres kann außerdem mehrere Änderungen **gemeinsam oder gar nicht** speiche
 
 MongoDB ist gut für Daten ohne feste Form, die kaum miteinander verbunden sind. Das ist hier nicht der Fall. Mit MongoDB müssten wir viele dieser Regeln selbst im Code bauen.
 
----
+</details>
 
-### Was passiert beim Hochladen einer Datei?
+<details>
+<summary><b>Was passiert beim Hochladen einer Datei?</b></summary>
 
 1. Die App prüft die Datei:
    - Ist sie größer als **50 MB**, antwortet sie mit `413`.
@@ -120,11 +303,13 @@ MongoDB ist gut für Daten ohne feste Form, die kaum miteinander verbunden sind.
 3. **Erst danach** schreibt die App in die Datenbank, wo die neue Datei liegt.
 4. Hatte das Buch vorher schon eine Datei, wird die alte jetzt gelöscht.
 
-Die wichtigste Regel dahinter: **Die Datenbank zeigt nie auf eine Datei, die es nicht gibt.** Andersherum ist es harmlos, wenn irgendwo eine Datei liegt, auf die nichts zeigt.
+> [!IMPORTANT]
+> Die wichtigste Regel dahinter: **Die Datenbank zeigt nie auf eine Datei, die es nicht gibt.** Andersherum ist es harmlos, wenn irgendwo eine Datei liegt, auf die nichts zeigt.
 
----
+</details>
 
-### Und wenn die Verbindung weg ist?
+<details>
+<summary><b>Und wenn die Verbindung weg ist?</b></summary>
 
 | Was bricht ab? | Was passiert? |
 |---|---|
@@ -135,9 +320,10 @@ Die wichtigste Regel dahinter: **Die Datenbank zeigt nie auf eine Datei, die es 
 
 In keinem Fall zeigt ein Buch auf eine kaputte oder fehlende Datei.
 
----
+</details>
 
-### Zu große Dateien?
+<details>
+<summary><b>Zu große Dateien?</b></summary>
 
 Im Moment gilt ein Limit von **50 MB**. Alles darüber lehnt die App sofort mit `413` ab.
 
@@ -149,9 +335,10 @@ Ist das irgendwann zu wenig, gibt es den nächsten Schritt: **Direkt-Upload mit 
 
 So muss die App die großen Dateien nicht selbst durchreichen.
 
----
+</details>
 
-### Brauchen wir eine Queue?
+<details>
+<summary><b>Brauchen wir eine Queue?</b></summary>
 
 **Für den Upload selbst: nein.** Der Upload ist schnell, und der Nutzer will sofort wissen, ob er geklappt hat.
 
@@ -163,9 +350,10 @@ So muss die App die großen Dateien nicht selbst durchreichen.
 
 Diese Arbeit kommt dann in eine Queue (eine Warteschlange). Ein Hintergrund-Prozess arbeitet sie Stück für Stück ab, und der Nutzer muss nicht warten. Fällt dabei etwas aus, bleibt die Aufgabe in der Queue und wird später erneut versucht.
 
----
+</details>
 
-### Zu viele Reads? Redis?
+<details>
+<summary><b>Zu viele Reads? Redis?</b></summary>
 
 Erst einmal **nicht nötig**. Vorher gibt es einfachere Schritte:
 
@@ -178,9 +366,10 @@ Erst wenn das nicht reicht, kommt **Redis** als Zwischenspeicher davor, z. B. f�
 
 Für die **Dateien** brauchen wir Redis nicht. Die kommen direkt aus RustFS oder später aus einem CDN.
 
----
+</details>
 
-### Was passiert bei einem Cache-Miss?
+<details>
+<summary><b>Was passiert bei einem Cache-Miss?</b></summary>
 
 Ein *Cache-Miss* heißt: Die Daten sind (noch) nicht in Redis.
 
@@ -198,15 +387,17 @@ Zwei Dinge muss man beachten:
 
 Und wenn Redis ganz ausfällt, fragt die App einfach direkt Postgres. Es wird langsamer, aber es geht nichts kaputt.
 
----
+</details>
 
-### Zu viele Writes?
+<details>
+<summary><b>Zu viele Writes?</b></summary>
 
 In einer Bücherei passiert das praktisch nicht. Geschrieben wird nur, wenn jemand ein Buch anlegt, ausleiht oder zurückgibt. Das sind wenige Aktionen pro Minute. Postgres schafft Tausende pro Sekunde.
 
----
+</details>
 
-### Zu viele Bücher? Sharding oder größere Datenbank?
+<details>
+<summary><b>Zu viele Bücher? Sharding oder größere Datenbank?</b></summary>
 
 **Erst die größere Datenbank. Sharding ganz zum Schluss.**
 
@@ -221,9 +412,10 @@ Die Reihenfolge, wenn es wirklich eng wird:
 
 Die **Dateien** wachsen viel schneller als die Datenbank. Dafür gibt man RustFS einfach mehr Festplatten oder weitere Server.
 
----
+</details>
 
-### Pagination und Sorting: Frontend oder Backend? Und wie?
+<details>
+<summary><b>Pagination und Sorting: Frontend oder Backend? Und wie?</b></summary>
 
 **Im Backend.**
 
@@ -241,6 +433,8 @@ Es gibt zwei Arten von Pagination:
 **Unsere Empfehlung:**
 
 - **Cursor-Pagination** für Bücher und Ausleihen. Die Antwort enthält einen Wert für „nächste Seite“, den das Frontend beim nächsten Aufruf mitschickt.
-- **Sortieren** über einen Parameter, z. B. `?sort=titel` oder `?sort=-jahr` (das Minus heißt absteigend).
+- **Sortieren** über einen Parameter, z. B. `?sort=titel` oder `?sort=-jahr` (das Minus heißt absteigend). *Sortieren und Suchen sind schon gebaut, siehe [Suchen und Sortieren](#suchen-und-sortieren). Pagination noch nicht.*
 - Nur **erlaubte Spalten** zum Sortieren zulassen (Titel, Autor, Jahr). Den Wert aus der URL nie direkt in die SQL-Abfrage schreiben, sonst ist das eine Sicherheitslücke (SQL-Injection).
 - Für jede Spalte, nach der sortiert wird, einen **Index** anlegen, damit es schnell bleibt.
+
+</details>
