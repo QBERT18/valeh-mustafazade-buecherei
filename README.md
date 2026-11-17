@@ -227,9 +227,9 @@ npm test       # Tests für slugify
 | Adresse | Was man dort macht |
 |---|---|
 | `/books` | Alle Bücher. Suchen und sortieren. |
-| `/books/new` | Neues Buch anlegen |
-| `/books/1-faust` | Ein Buch ansehen, ausleihen, zurückgeben, löschen |
-| `/books/1-faust/edit` | Ein Buch bearbeiten |
+| `/books/new` | Neues Buch anlegen, optional mit PDF oder EPUB |
+| `/books/1-faust` | Ein Buch ansehen, Datei herunterladen, ausleihen, zurückgeben, löschen |
+| `/books/1-faust/edit` | Ein Buch bearbeiten und die Datei ersetzen |
 | `/shelves`, `/shelves/new`, `/shelves/1-klassiker`, `/shelves/1-klassiker/edit` | Das Gleiche für Regale |
 | `/me` | Meine Ausleihen: was ich gerade habe, und was ich schon zurückgegeben habe |
 

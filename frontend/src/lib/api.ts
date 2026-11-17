@@ -45,10 +45,12 @@ export class ApiError extends Error {
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  // FormData sets its own multipart Content-Type (with boundary), so leave the header out.
+  const isForm = body instanceof FormData;
   const res = await fetch(`/api${path}`, {
     method,
-    headers: body ? { "Content-Type": "application/json" } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
+    headers: body && !isForm ? { "Content-Type": "application/json" } : undefined,
+    body: isForm ? body : body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
     const data = await res.json().catch(() => null);
@@ -66,6 +68,11 @@ export const api = {
   updateBook: (id: number, b: BookInput) => request<Book>("PUT", `/books/${id}`, b),
   deleteBook: (id: number) => request<void>("DELETE", `/books/${id}`),
   fileUrl: (id: number) => `/api/books/${id}/file`,
+  uploadFile: (id: number, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<Book>("PUT", `/books/${id}/file`, form);
+  },
 
   listShelves: (q = "", sort = "") => request<Shelf[]>("GET", list("/shelves", q, sort)),
   getShelf: (id: number) => request<Shelf>("GET", `/shelves/${id}`),

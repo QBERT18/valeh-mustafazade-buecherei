@@ -19,6 +19,8 @@ export default function BookForm() {
   useCanonicalPath(book.data && `/books/${toSlug(book.data.ID, book.data.Titel)}/edit`);
 
   const [form, setForm] = useState(empty);
+  const [file, setFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
   const set = (key: keyof typeof empty) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((f) => ({ ...f, [key]: e.target.type === "checkbox" ? (e.target as HTMLInputElement).checked : e.target.value }));
@@ -47,11 +49,24 @@ export default function BookForm() {
       ShelfID: form.shelfId ? Number(form.shelfId) : null,
       Praesenzbestand: form.praesenz,
     };
+    setSaving(true);
     try {
       const saved = id ? await api.updateBook(id, input) : await api.createBook(input);
-      navigate(`/books/${toSlug(saved.ID, saved.Titel)}`);
+      // The book needs an ID before it can get a file. If only the upload fails, the book
+      // is saved anyway: go to its page and show the error there (re-submitting this
+      // form would create the book twice).
+      let uploadError: string | undefined;
+      if (file) {
+        try {
+          await api.uploadFile(saved.ID, file);
+        } catch (e) {
+          uploadError = `Buch gespeichert, aber die Datei wurde nicht hochgeladen: ${(e as Error).message}`;
+        }
+      }
+      navigate(`/books/${toSlug(saved.ID, saved.Titel)}`, { state: { uploadError } });
     } catch (e) {
       setError((e as Error).message);
+      setSaving(false);
     }
   }
 
@@ -91,9 +106,19 @@ export default function BookForm() {
         <input type="checkbox" checked={form.praesenz} onChange={set("praesenz")} />
         Präsenzbestand (nicht ausleihbar)
       </label>
+      <Field label={book.data?.FileName ? `Datei ersetzen (jetzt: ${book.data.FileName})` : "Datei (PDF oder EPUB, max. 50 MB)"}>
+        <input
+          type="file"
+          accept=".pdf,.epub,application/pdf,application/epub+zip"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          className="block text-sm"
+        />
+      </Field>
       <ErrorText error={error ?? shelves.error} />
       <div className="flex gap-2">
-        <button className={button}>Speichern</button>
+        <button className={button} disabled={saving}>
+          {saving ? "Speichert …" : "Speichern"}
+        </button>
         <Link to={book.data ? `/books/${toSlug(book.data.ID, book.data.Titel)}` : "/books"} className={buttonLight}>
           Abbrechen
         </Link>

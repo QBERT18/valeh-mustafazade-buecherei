@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { api, formatDate, yearOf } from "../lib/api";
 import { useCanonicalPath, useLoad } from "../lib/hooks";
 import { idFromSlug, toSlug } from "../lib/slug";
@@ -10,6 +10,7 @@ export default function BookDetail() {
   const id = idFromSlug(useParams().slug);
   const { person } = useUser();
   const navigate = useNavigate();
+  const uploadError = (useLocation().state as { uploadError?: string } | null)?.uploadError; // from BookForm
 
   const book = useLoad(() => (id ? api.getBook(id) : Promise.reject(new Error("Buch nicht gefunden."))), [id]);
   const loans = useLoad(() => api.listLoans(), [id]);
@@ -69,6 +70,7 @@ export default function BookDetail() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">{b.Titel}</h1>
+      <ErrorText error={uploadError} />
       <dl className="grid grid-cols-[8rem_1fr] gap-y-1">
         {rows.map(([label, value]) => (
           <div key={label} className="contents">
